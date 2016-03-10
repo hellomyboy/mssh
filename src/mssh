@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# function: ssh进行多机管理
+# author: ht0411@qq.com
+# date: 2016/3/10
+
+#usage: 
+# (0) mssh -h|--help
+# (1) mssh cp /localfile1 /localfile2 ... /localfilen /remotedir
+# (2) mssh fetch "remote file full path" /localdir
+# (3) mssh cmd "executable cmd on remote server"
+
+#set -x
+if [ $# -lt 1 ]; then
+    echo "at least 1 params"
+    exit
+fi
+
+HOSTS_FILE=/home/work/local/mssh/hosts
+CMD_TYPE=$1
+if [ $CMD_TYPE == "cmd" ]; then
+    if [ $# -ne 2 ]; then
+	echo "cmd has 2 params"
+	exit
+    fi
+    idx=1
+    for host in `cat $HOSTS_FILE`
+    do
+	echo -e "-------------------- $host ($idx)--------------------" 
+	ssh $host "$2"
+	idx=$[$idx+1]
+    done
+elif [ $CMD_TYPE == "fetch" ]; then
+    if [ $# -ne 3 ]; then
+	echo "fetch has 3 params"
+	exit
+    fi
+    idx=1
+    for host in `cat $HOSTS_FILE`
+    do
+	echo -e "-------------------- $host ($idx)--------------------" 
+    scp $host:$2 $3
+	idx=$[$idx+1]
+    done
+elif [ $CMD_TYPE == "cp" ]; then
+    if [ $# -lt 3 ]; then
+	echo "cp at least 3 params"
+        exit
+    fi
+    idx=1
+    for host in `cat $HOSTS_FILE`
+    do
+	echo -e "-------------------- $host ($idx)--------------------" 
+	localFiles=""
+	for ((i=2; i<=$[$#-1]; i++))
+	do
+	    localFiles="$localFiles ${!i}"
+	done
+	scp $localFiles $host:${!#}
+	idx=$[$idx+1]
+    done
+elif [ $CMD_TYPE == "-h" -o $CMD_TYPE == "--help" ]; then
+    echo " (0) mssh -h|--help"
+    echo " (1) mssh cp /localfile1 /localfile2 ... /localfilen /remotedir"
+    echo " (2) mssh fetch "remote file full path" /localdir"
+    echo " (3) mssh cmd "executable cmd on remote server"
+else
+    echo "invalid cmd:$1"
+    exit 1
+fi
+
+exit 0
