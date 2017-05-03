@@ -16,57 +16,101 @@ if [ $# -lt 1 ]; then
     exit
 fi
 
-HOSTS_FILE=/home/work/local/mssh/hosts
+HOSTS_FILE=/root/huangtao/mssh/hosts
+#HOSTS_FILE=`pwd`/hosts
 CMD_TYPE=$1
+
+if [ $CMD_TYPE == "-h" -o $CMD_TYPE == "--help" ]; then
+    echo ' (0) mssh -h|--help'
+    echo ' (1) mssh cp /localfile1 /localfile2 ... /localfilen /remotedir'
+    echo ' (2) mssh fetch "remote file full path" /localdir'
+    echo ' (3) mssh cmd "executable cmd on remote server'
+    exit
+fi
+
+tmp_fifofile="/tmp/$$.fifo"  #create fifo file
+mkfifo $tmp_fifofile    #fd6 point to fifo file
+exec 6<>$tmp_fifofile
+rm $tmp_fifofile
+
+thread=12 #max work thread number
+startidx=1
+endidx=1
+for ((i=0;i<$thread;i++)); do
+echo
+done >& 6 #feed \n to fd6
+
 if [ $CMD_TYPE == "cmd" ]; then
     if [ $# -ne 2 ]; then
 	echo "cmd has 2 params"
 	exit
     fi
-    idx=1
     for host in `cat $HOSTS_FILE`
     do
-	echo -e "-------------------- $host ($idx)--------------------" 
-	ssh $host "$2"
-	idx=$[$idx+1]
+        read -u6
+	    startidx=$[$startidx+1]
+        {
+	    #echo -e "----------------start $host ($startidx)--------------------" 
+	    ssh $host "$2"
+	    #echo -e "----------------finish $host ($endidx)--------------------" 
+	    echo -e "---------------- finish $host --------------------" 
+        endidx=$[$endidx+1]
+        echo >& 6
+        } &
     done
+    wait
 elif [ $CMD_TYPE == "fetch" ]; then
     if [ $# -ne 3 ]; then
 	echo "fetch has 3 params"
 	exit
     fi
-    idx=1
     for host in `cat $HOSTS_FILE`
     do
-	echo -e "-------------------- $host ($idx)--------------------" 
-    scp $host:$2 $3
-	idx=$[$idx+1]
+        read -u6
+	    startidx=$[$startidx+1]
+        {
+	    #echo -e "----------------start $host ($startidx)--------------------" 
+        scp $host:$2 $3
+	    #echo -e "----------------finish $host ($endidx)--------------------" 
+	    echo -e "---------------- finish $host --------------------" 
+        endidx=$[$endidx+1]
+        echo >& 6
+        } &
     done
+    wait
 elif [ $CMD_TYPE == "cp" ]; then
     if [ $# -lt 3 ]; then
 	echo "cp at least 3 params"
         exit
     fi
-    idx=1
-    for host in `cat $HOSTS_FILE`
-    do
-	echo -e "-------------------- $host ($idx)--------------------" 
+
 	localFiles=""
 	for ((i=2; i<=$[$#-1]; i++))
 	do
 	    localFiles="$localFiles ${!i}"
 	done
-	scp $localFiles $host:${!#}
-	idx=$[$idx+1]
+
+    idx=1
+    for host in `cat $HOSTS_FILE`
+    do
+        read -u6
+	    startidx=$[$startidx+1]
+        {
+	    #echo -e "----------------start $host ($startidx)--------------------" 
+	    scp $localFiles $host:${!#}
+	    #echo -e "----------------finish $host ($endidx)--------------------" 
+	    echo -e "---------------- finish $host --------------------" 
+        endidx=$[$endidx+1]
+        echo >& 6
+        } &
     done
-elif [ $CMD_TYPE == "-h" -o $CMD_TYPE == "--help" ]; then
-    echo " (0) mssh -h|--help"
-    echo " (1) mssh cp /localfile1 /localfile2 ... /localfilen /remotedir"
-    echo " (2) mssh fetch "remote file full path" /localdir"
-    echo " (3) mssh cmd "executable cmd on remote server"
+    wait
 else
     echo "invalid cmd:$1"
     exit 1
 fi
 
+#close fd6
+exec 6>&-
+echo "complete, captain :)"
 exit 0
